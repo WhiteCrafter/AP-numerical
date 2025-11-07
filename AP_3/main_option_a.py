@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+
 """
-AP3: Tangents, normals, and finite-difference accuracy (1D and 2D)
+AP3 Option A: Single window with multiple subplots (1D/2D errors and geometry)
 
 Features
 - 1D: tangent and normal lines; FD: forward/backward/central/five-point
@@ -8,12 +9,12 @@ Features
 - Error plots shown interactively; CSV tables optional to AP_3/output
 
 Usage
-- Run defaults: python AP_3/main.py
+- Run defaults: python AP_3/main_option_a.py
 - To customize, edit Config in this file to set callables and parameters.
 
 Notes
 - Pure-numpy callables for f1d/f2d; optional exact derivatives can be provided as callables.
-- Plots are displayed in windows; CSV tables optional. Works without pandas.
+- Plots are displayed in one window using subplots; CSV tables optional. Works without pandas.
 """
 
 from __future__ import annotations
@@ -60,7 +61,6 @@ def default_grad2d(x: float, y: float) -> Tuple[float, float]:
     # fy = x^2 + x cos(xy)
     xy = x * y
     c = float(np.cos(xy))
-    s = float(np.sin(xy))  # unused, here for completeness
     fx = 2.0 * x * y + y * c
     fy = x * x + x * c
     return float(fx), float(fy)
@@ -108,9 +108,6 @@ def fd_five_point_2d_y(f: Callable[[np.ndarray, np.ndarray], np.ndarray], x0: fl
 def tangent_normal_1d(f: Callable[[np.ndarray], np.ndarray], x0: float, df_exact: float) -> Dict[str, Tuple[float, float]]:
     y0 = float(f(x0))
     m = df_exact
-    # Tangent line: y = y0 + m (x - x0)
-    # Normal line slope is -1/m if m != 0; represent as vector to avoid inf slope when m=0
-    # Return direction vectors for tangent and normal, normalized
     tvec = np.array([1.0, m], dtype=float)
     tvec = tvec / (np.linalg.norm(tvec) or 1.0)
     nvec = np.array([-m, 1.0], dtype=float)
@@ -127,14 +124,12 @@ def tangent_plane_normal_2d(
     f: Callable[[np.ndarray, np.ndarray], np.ndarray], x0: float, y0: float, fx: float, fy: float
 ) -> Dict[str, Tuple[float, float, float]]:
     z0 = float(f(x0, y0))
-    # Plane: z = z0 + fx*(x - x0) + fy*(y - y0)
-    # Normal vector to z = f(x,y) is [-fx, -fy, 1]
     n = np.array([-fx, -fy, 1.0], dtype=float)
     n = n / (np.linalg.norm(n) or 1.0)
     return {
         "point": (x0, y0, z0),
         "normal_dir": (float(n[0]), float(n[1]), float(n[2])),
-        "plane_coeffs": (z0, fx, fy),  # z = z0 + fx*(x-x0) + fy*(y-y0)
+        "plane_coeffs": (z0, fx, fy),
     }
 
 
@@ -150,8 +145,10 @@ def print_table(headers: List[str], rows: List[List[float]]) -> None:
     for row in rows:
         for i, cell in enumerate(row):
             widths[i] = max(widths[i], len(f"{cell:g}"))
+
     def fmt_row(items: Iterable):
         return " | ".join(f"{str(x):>{w}}" for x, w in zip(items, widths))
+
     print(fmt_row(headers))
     print("-+-".join("-" * w for w in widths))
     for row in rows:
@@ -161,6 +158,7 @@ def print_table(headers: List[str], rows: List[List[float]]) -> None:
 def save_csv(path: str, headers: List[str], rows: List[List[float]]) -> None:
     try:
         import csv
+
         with open(path, "w", newline="") as f:
             writer = csv.writer(f)
             writer.writerow(headers)
@@ -169,106 +167,69 @@ def save_csv(path: str, headers: List[str], rows: List[List[float]]) -> None:
         print(f"[warn] Could not save CSV to {path}: {e}")
 
 
-def plot_errors(hs: np.ndarray, series: Dict[str, np.ndarray], title: str, out_path: str) -> None:
-    plt.figure(figsize=(6, 4))
+# --------------------- Drawing (axes-based, no show/close) ---------------------
+
+
+def draw_errors(ax, hs: np.ndarray, series: Dict[str, np.ndarray], title: str) -> None:
     for label, errs in series.items():
-        plt.loglog(hs, errs, marker="o", label=label)
-    plt.gca().invert_xaxis()  # decreasing h to the right
-    plt.xlabel("h")
-    plt.ylabel("absolute error")
-    plt.title(title)
-    plt.grid(True, which="both", ls=":", alpha=0.6)
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
-    plt.close()
+        ax.loglog(hs, errs, marker="o", label=label)
+    ax.invert_xaxis()
+    ax.set_xlabel("h")
+    ax.set_ylabel("absolute error")
+    ax.set_title(title)
+    ax.grid(True, which="both", ls=":", alpha=0.6)
+    ax.legend(fontsize=8)
 
 
-def plot_1d_tangent_and_secants(
-    f: Callable[[np.ndarray], np.ndarray],
-    x0: float,
-    df_exact: float,
-    hs_show: List[float],
-    out_path: str,
-) -> None:
+def draw_1d_tangent_and_secants(ax, f: Callable[[np.ndarray], np.ndarray], x0: float, df_exact: float, hs_show: List[float]) -> None:
     y0 = float(f(x0))
     width = max(1.0, 20.0 * max(hs_show))
     xs = np.linspace(x0 - width, x0 + width, 400)
     ys = f(xs)
-
-    plt.figure(figsize=(7, 4.5))
-    plt.plot(xs, ys, label="f(x)")
-    # Exact tangent line
+    ax.plot(xs, ys, label="f(x)")
     y_tan = y0 + df_exact * (xs - x0)
-    plt.plot(xs, y_tan, '--', label="tangent (exact)")
-    # Normal line
+    ax.plot(xs, y_tan, '--', label="tangent (exact)")
     if df_exact != 0 and np.isfinite(df_exact):
         m_n = -1.0 / df_exact
         y_norm = y0 + m_n * (xs - x0)
-        plt.plot(xs, y_norm, ':', label="normal line")
+        ax.plot(xs, y_norm, ':', label="normal line")
     else:
-        plt.axvline(x0, color='gray', linestyle=':', label='normal (vertical)')
-
-    # Secant lines using forward differences for selected h
+        ax.axvline(x0, color='gray', linestyle=':', label='normal (vertical)')
     colors = plt.cm.viridis(np.linspace(0.15, 0.85, len(hs_show)))
     for c, h in zip(colors, hs_show):
         slope = (float(f(x0 + h)) - y0) / h
         y_sec = y0 + slope * (xs - x0)
-        plt.plot(xs, y_sec, color=c, alpha=0.9, label=f"secant h={h:g}")
-        plt.scatter([x0, x0 + h], [y0, float(f(x0 + h))], color=c, s=25)
-
-    plt.scatter([x0], [y0], color='k', s=35, zorder=5, label='point (x0,f(x0))')
-    plt.title("1D: function with tangent and secants")
-    plt.xlabel("x")
-    plt.ylabel("y")
-    plt.grid(True, ls=':', alpha=0.6)
-    plt.legend(loc='best', fontsize=8)
-    plt.tight_layout()
-    plt.show()
-    plt.close()
+        ax.plot(xs, y_sec, color=c, alpha=0.9, label=f"secant h={h:g}")
+        ax.scatter([x0, x0 + h], [y0, float(f(x0 + h))], color=c, s=20)
+    ax.scatter([x0], [y0], color='k', s=25, zorder=5, label='(x0,f(x0))')
+    ax.set_title("1D: function with tangent and secants")
+    ax.set_xlabel("x")
+    ax.set_ylabel("y")
+    ax.grid(True, ls=':', alpha=0.6)
+    ax.legend(loc='best', fontsize=7)
 
 
-def plot_2d_contour_with_gradient(
-    f: Callable[[np.ndarray, np.ndarray], np.ndarray],
-    x0: float,
-    y0: float,
-    fx: float,
-    fy: float,
-    out_path: str,
-) -> None:
+def draw_2d_contour_with_gradient(ax, f: Callable[[np.ndarray, np.ndarray], np.ndarray], x0: float, y0: float, fx: float, fy: float) -> None:
     width = 1.0
     xs = np.linspace(x0 - width, x0 + width, 120)
     ys = np.linspace(y0 - width, y0 + width, 120)
     X, Y = np.meshgrid(xs, ys)
     Z = f(X, Y)
-
-    plt.figure(figsize=(6, 5))
-    cs = plt.contour(X, Y, Z, levels=20, cmap='viridis')
-    plt.clabel(cs, inline=True, fontsize=7, fmt='%.2f')
-    plt.scatter([x0], [y0], color='k', s=30)
+    cs = ax.contour(X, Y, Z, levels=20, cmap='viridis')
+    ax.clabel(cs, inline=True, fontsize=7, fmt='%.2f')
+    ax.scatter([x0], [y0], color='k', s=25)
     g = np.array([fx, fy])
     if np.linalg.norm(g) > 0:
         g_unit = g / np.linalg.norm(g)
         scale = width * 0.5
-        plt.arrow(x0, y0, g_unit[0] * scale, g_unit[1] * scale, head_width=0.05, color='red', length_includes_head=True)
-    plt.title("2D: contours with gradient vector at (x0,y0)")
-    plt.xlabel("x")
-    plt.ylabel("y")
-    plt.grid(True, ls=':', alpha=0.5)
-    plt.tight_layout()
-    plt.show()
-    plt.close()
+        ax.arrow(x0, y0, g_unit[0] * scale, g_unit[1] * scale, head_width=0.05, color='red', length_includes_head=True)
+    ax.set_title("2D: contours with gradient at (x0,y0)")
+    ax.set_xlabel("x")
+    ax.set_ylabel("y")
+    ax.grid(True, ls=':', alpha=0.5)
 
 
-def plot_3d_surface_and_plane(
-    f: Callable[[np.ndarray, np.ndarray], np.ndarray],
-    x0: float,
-    y0: float,
-    fx: float,
-    fy: float,
-    out_path: str,
-) -> None:
-    from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
+def draw_3d_surface_and_plane(ax, f: Callable[[np.ndarray, np.ndarray], np.ndarray], x0: float, y0: float, fx: float, fy: float) -> None:
     width = 1.0
     xs = np.linspace(x0 - width, x0 + width, 60)
     ys = np.linspace(y0 - width, y0 + width, 60)
@@ -276,9 +237,6 @@ def plot_3d_surface_and_plane(
     Z = f(X, Y)
     z0 = float(f(x0, y0))
     Zp = z0 + fx * (X - x0) + fy * (Y - y0)
-
-    fig = plt.figure(figsize=(7, 5))
-    ax = fig.add_subplot(111, projection='3d')
     ax.plot_surface(X, Y, Z, cmap='viridis', alpha=0.8, linewidth=0)
     ax.plot_surface(X, Y, Zp, cmap='autumn', alpha=0.35, linewidth=0)
     ax.scatter([x0], [y0], [z0], color='k', s=20)
@@ -286,9 +244,6 @@ def plot_3d_surface_and_plane(
     ax.set_xlabel('x')
     ax.set_ylabel('y')
     ax.set_zlabel('z')
-    fig.tight_layout()
-    plt.show()
-    plt.close(fig)
 
 
 # --------------------- Main analysis ---------------------
@@ -307,7 +262,6 @@ class Config:
     y0: float = 0.4
     outdir: str = os.path.join("AP_3", "output")
     save_csvs: bool = True
-    # Step sizes to probe; exclude extremely tiny h that underflows double precision around 1e-16
     h_min: float = 1e-8
     h_max: float = 1e-1
     num_h: int = 12
@@ -319,7 +273,6 @@ def run(config: Config) -> None:
 
     # 1D setup
     f1d = config.f1d
-    # Reference derivative (exact if provided; else high-accuracy five-point)
     if config.df1d is not None:
         df_exact = float(config.df1d(config.x0))
     else:
@@ -335,7 +288,7 @@ def run(config: Config) -> None:
         fx_exact = fd_five_point_2d_x(f2d, config.x0, config.y0, h_ref)
         fy_exact = fd_five_point_2d_y(f2d, config.x0, config.y0, h_ref)
 
-    # Geometry
+    # Geometry info (printed)
     g1d = tangent_normal_1d(f1d, config.x0, df_exact)
     g2d = tangent_plane_normal_2d(f2d, config.x0, config.y0, fx_exact, fy_exact)
 
@@ -386,10 +339,9 @@ def run(config: Config) -> None:
     print_table(["h"] + list(schemes_1d.keys()), err_table_1d)
     if config.save_csvs:
         save_csv(os.path.join(config.outdir, "errors_1d.csv"), ["h"] + list(schemes_1d.keys()), err_table_1d)
-    plot_errors(hs, series_1d, "1D derivative error vs h", os.path.join(config.outdir, "errors_1d.png"))
 
     # 2D errors for fx and fy
-    def sweep_2d(partial_fun, exact_val, label_prefix: str) -> None:
+    def sweep_2d(partial_fun, exact_val, label_prefix: str) -> Tuple[List[List[float]], Dict[str, np.ndarray]]:
         schemes = {
             "central O(h^2)": partial_fun["central"],
             "five-point O(h^4)": partial_fun["five"],
@@ -408,9 +360,9 @@ def run(config: Config) -> None:
         print_table(["h"] + list(schemes.keys()), table)
         if config.save_csvs:
             save_csv(os.path.join(config.outdir, f"errors_2d_{label_prefix}.csv"), ["h"] + list(schemes.keys()), table)
-        plot_errors(hs, series, f"2D {label_prefix} error vs h", os.path.join(config.outdir, f"errors_2d_{label_prefix}.png"))
+        return table, series
 
-    sweep_2d(
+    _, series_fx = sweep_2d(
         {
             "central": lambda h: fd_central_2d_x(f2d, config.x0, config.y0, h),
             "five": lambda h: fd_five_point_2d_x(f2d, config.x0, config.y0, h),
@@ -418,7 +370,7 @@ def run(config: Config) -> None:
         fx_exact,
         "fx",
     )
-    sweep_2d(
+    _, series_fy = sweep_2d(
         {
             "central": lambda h: fd_central_2d_y(f2d, config.x0, config.y0, h),
             "five": lambda h: fd_five_point_2d_y(f2d, config.x0, config.y0, h),
@@ -427,70 +379,36 @@ def run(config: Config) -> None:
         "fy",
     )
 
-    # Illustrative plots for a few h values and geometry
+    # Illustrative subplots
     hs_show: List[float] = list(config.show_h) if config.show_h else [float(hs[0]), float(hs[len(hs)//2]), float(hs[-1])]
-    try:
-        plot_1d_tangent_and_secants(
-            f1d,
-            config.x0,
-            df_exact,
-            hs_show,
-            os.path.join(config.outdir, "curve_tangent_secants.png"),
-        )
-    except Exception as e:
-        print(f"[warn] Could not create 1D plot: {e}")
-    try:
-        plot_2d_contour_with_gradient(
-            f2d,
-            config.x0,
-            config.y0,
-            fx_exact,
-            fy_exact,
-            os.path.join(config.outdir, "surface_contour_gradient.png"),
-        )
-    except Exception as e:
-        print(f"[warn] Could not create 2D contour plot: {e}")
-    try:
-        plot_3d_surface_and_plane(
-            f2d,
-            config.x0,
-            config.y0,
-            fx_exact,
-            fy_exact,
-            os.path.join(config.outdir, "surface_plane_3d.png"),
-        )
-    except Exception as e:
-        print(f"[warn] Could not create 3D surface/plane plot: {e}")
 
-    # Save a small README of formulas used
-    readme_path = os.path.join(config.outdir, "README.txt")
-    try:
-        with open(readme_path, "w") as f:
-            f.write(
-                "Tangent/Normal and FD summary\n\n"
-                "1D: tangent y = f(x0) + f'(x0)(x - x0); normal vector n ~ (-f'(x0), 1).\n"
-                "2D: tangent plane z = f0 + fx(x - x0) + fy(y - y0); normal n ~ (-fx, -fy, 1).\n"
-                "FD 1D: forward/backward O(h), central O(h^2), five-point O(h^4).\n"
-                "FD 2D: central O(h^2) and five-point O(h^4) for partials.\n"
-            )
-    except Exception as e:
-        print(f"[warn] Could not write {readme_path}: {e}")
+    fig = plt.figure(figsize=(12, 8))
+    gs = fig.add_gridspec(2, 3)
+    ax_err1d = fig.add_subplot(gs[0, 0])
+    ax_err_fx = fig.add_subplot(gs[0, 1])
+    ax_err_fy = fig.add_subplot(gs[0, 2])
+    ax_tan = fig.add_subplot(gs[1, 0])
+    ax_contour = fig.add_subplot(gs[1, 1])
+    ax3d = fig.add_subplot(gs[1, 2], projection='3d')
+
+    draw_errors(ax_err1d, hs, series_1d, "1D derivative error vs h")
+    draw_errors(ax_err_fx, hs, series_fx, "2D fx error vs h")
+    draw_errors(ax_err_fy, hs, series_fy, "2D fy error vs h")
+    draw_1d_tangent_and_secants(ax_tan, f1d, config.x0, df_exact, hs_show)
+    draw_2d_contour_with_gradient(ax_contour, f2d, config.x0, config.y0, fx_exact, fy_exact)
+    draw_3d_surface_and_plane(ax3d, f2d, config.x0, config.y0, fx_exact, fy_exact)
+
+    fig.tight_layout()
+    plt.show()
 
 
 if __name__ == "__main__":
-    # Edit the config here if you want to customize the run.
     cfg = Config(
-        # f1d=default_f1d,
-        # df1d=default_df1d,  # or None to use 5-point FD reference
-        # f2d=default_f2d,
-        # grad2d=default_grad2d,  # or None
-        # x0=0.5,
-        # y0=0.4,
-        # outdir=os.path.join("AP_3", "output"),
-        # save_csvs=True,
-        # h_min=1e-8,
-        # h_max=1e-1,
-        # num_h=12,
-        # show_h=(),  # e.g., (0.1, 0.01, 0.001)
+        # Customize here if desired
+        # f1d=default_f1d, df1d=default_df1d,
+        # f2d=default_f2d, grad2d=default_grad2d,
+        # x0=0.5, y0=0.4,
+        # show_h=(0.1, 0.01, 0.001),
     )
     run(cfg)
+
