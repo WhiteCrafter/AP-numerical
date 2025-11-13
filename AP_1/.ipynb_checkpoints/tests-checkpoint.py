@@ -2,46 +2,35 @@ import numpy as np
 import plotly.graph_objects as go
 
 # -------- CHOOSE NORM HERE --------
-def norm1(v):    return np.abs(v).sum()
+def norm1(v):
+    return np.abs(v).sum()
 
-def norm2(v):    return np.sqrt((v**2).sum())
+def norm2(v):
+    return np.sqrt((v**2).sum())
 
-def norm_inf(v):    return np.max(np.abs(v))
+def norm_inf(v):
+    return np.max(np.abs(v))
 
-norm = norm2   # change to norm2 or norm_inf
+norm = norm1   # change to norm2 or norm_inf
 
 frames = []
 steps = []
 
-
-vector1 = np.array([2, 1 , 3, 4])
 # -------- SAMPLE POINTS --------
-res = 60
-
-xs, ys, zs = np.mgrid[
-    -1:1:complex(res),
-    -1:1:complex(res),
-    -1:1:complex(res)
-]
-
-pts3 = np.vstack((xs.ravel(), ys.ravel(), zs.ravel())).T + vector1[:3]
-N = pts3.shape[0]  # about 216,000 points
-
+N = 200000
+pts3 = np.random.uniform(-1, 1, (N, 3))
 
 values = np.linspace(-1, 1, 51)
 eps = 0.02  # IMPORTANT for L1 norm
 
-
-
-
 for idx, w0 in enumerate(values):
 
-    pts4 = np.column_stack([pts3, np.full(N, w0+vector1[3])])
+    pts4 = np.column_stack([pts3, np.full(N, w0)])
+    vals = np.apply_along_axis(norm, 1, pts4)
 
-    vals = np.apply_along_axis(norm, 1, (pts4-vector1))
-
-    mask = (vals > 1-eps) & (vals < 1)
+    mask = (vals > 1-eps) & (vals < 1+eps)
     pts_slice = pts3[mask]
+
     x, y, z = pts_slice[:,0], pts_slice[:,1], pts_slice[:,2]
 
     frame = go.Frame(
@@ -74,7 +63,7 @@ for idx, w0 in enumerate(values):
 
 # -------- INITIAL FRAME --------
 w0 = values[0]
-pts4 = np.column_stack([pts3, np.full(N, w0)]) + vector1
+pts4 = np.column_stack([pts3, np.full(N, w0)])
 vals = np.apply_along_axis(norm, 1, pts4)
 mask = (vals > 1-eps) & (vals < 1+eps)
 pts_slice = pts3[mask]
@@ -99,9 +88,9 @@ fig = go.Figure(
             )
         ],
         scene=dict(
-            xaxis=dict(range=[-1 + vector1[0], 1 + vector1[0]]),
-            yaxis=dict(range=[-1 + vector1[1], 1 + vector1[1]]),
-            zaxis=dict(range=[-1 + vector1[2], 1 + vector1[2]]),
+            xaxis=dict(range=[-1, 1]),
+            yaxis=dict(range=[-1, 1]),
+            zaxis=dict(range=[-1, 1]),
             aspectmode='cube'
         )
     ),
