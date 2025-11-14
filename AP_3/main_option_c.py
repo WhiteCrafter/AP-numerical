@@ -1,120 +1,178 @@
-#!/usr/bin/env python3
-
-# Option C — super simple, student-style script
-# No classes, no configs, no CSVs, no saving images.
-# Just compute a few things and pop up some plots.
-
-import math
 import numpy as np
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
+
+# ------------------------------
+# 1D FUNCTION + EXACT DERIVATIVE
+# ------------------------------
+
+def f1(x):
+    return np.exp(x) * np.sin(x)
+
+def df1_exact(x):
+    return np.exp(x) * (np.sin(x) + np.cos(x))
+
+# Simple finite differences
+def fd_forward(f, x, h):
+    return (f(x+h) - f(x)) / h
+
+def fd_backward(f, x, h):
+    return (f(x) - f(x-h)) / h
+
+def fd_central(f, x, h):
+    return (f(x+h) - f(x-h)) / (2*h)
+
+def fd_five_point(f, x, h):
+    return (-f(x+2*h) + 8*f(x+h) - 8*f(x-h) + f(x-2*h)) / (12*h)
 
 
-# 1D function and its exact derivative (at scalars)
-def f1d(x):
-    return math.exp(x) * math.sin(x)
+# ------------------------------
+# 2D FUNCTION + EXACT GRADIENT
+# ------------------------------
+
+def f2(x, y):
+    return x*x*y + np.sin(x*y)
+
+def grad2_exact(x, y):
+    xy = x*y
+    fx = 2*x*y + y*np.cos(xy)
+    fy = x*x + x*np.cos(xy)
+    return fx, fy
+
+def fd_central_x(f, x, y, h):
+    return (f(x+h, y) - f(x-h, y)) / (2*h)
+
+def fd_central_y(f, x, y, h):
+    return (f(x, y+h) - f(x, y-h)) / (2*h)
+
+def fd_five_x(f, x, y, h):
+    return (-f(x+2*h, y)+8*f(x+h,y)-8*f(x-h,y)+f(x-2*h,y))/(12*h)
+
+def fd_five_y(f, x, y, h):
+    return (-f(x, y+2*h)+8*f(x,y+h)-8*f(x,y-h)+f(x,y-2*h))/(12*h)
 
 
-def df1d_exact(x):
-    # d/dx [e^x sin x] = e^x (sin x + cos x)
-    return math.exp(x) * (math.sin(x) + math.cos(x))
+# ------------------------------
+# ERROR ANALYSIS
+# ------------------------------
 
-
-# 2D function (scalar) and numpy version for grids
-def f2d(x, y):
-    return x * x * y + math.sin(x * y)
-
-
-def f2d_np(X, Y):
-    return X**2 * Y + np.sin(X * Y)
-
-
-def main():
-    # Point and steps
+def derivative_error_plots():
     x0 = 0.5
-    y0 = 0.4
-    hs = np.logspace(-1, -6, 8)  # a few h values
+    hs = np.logspace(-1, -8, 15)
+    exact = df1_exact(x0)
 
-    # 1D finite differences at x0
-    df_exact = df1d_exact(x0)
-    err_forward = []
-    err_central = []
+    errors = {
+        "forward": [],
+        "backward": [],
+        "central": [],
+        "five-point": []
+    }
+
     for h in hs:
-        df_f = (f1d(x0 + h) - f1d(x0)) / h
-        df_c = (f1d(x0 + h) - f1d(x0 - h)) / (2 * h)
-        err_forward.append(abs(df_f - df_exact))
-        err_central.append(abs(df_c - df_exact))
+        errors["forward"].append(abs(fd_forward(f1, x0, h) - exact))
+        errors["backward"].append(abs(fd_backward(f1, x0, h) - exact))
+        errors["central"].append(abs(fd_central(f1, x0, h) - exact))
+        errors["five-point"].append(abs(fd_five_point(f1, x0, h) - exact))
 
-    # Plot 1D errors
     plt.figure()
-    plt.loglog(hs, err_forward, 'o-', label='forward')
-    plt.loglog(hs, err_central, 'o-', label='central')
+    for name, vals in errors.items():
+        plt.loglog(hs, vals, marker="o", label=name)
     plt.gca().invert_xaxis()
-    plt.xlabel('h')
-    plt.ylabel('abs error')
-    plt.title("1D derivative error vs h")
-    plt.grid(True, which='both', ls=':')
+    plt.xlabel("h")
+    plt.ylabel("absolute error")
+    plt.title("1D Finite Difference Error")
+    plt.grid(True, which="both", ls=":")
     plt.legend()
-
-    # 1D curve + tangent line + a secant
-    xs = np.linspace(x0 - 2.0, x0 + 2.0, 400)
-    ys = np.exp(xs) * np.sin(xs)  # numpy version for vector inputs
-    y0 = f1d(x0)
-    m = df_exact
-    y_tan = y0 + m * (xs - x0)
-    h_show = 0.2
-    sec_slope = (f1d(x0 + h_show) - y0) / h_show
-    y_sec = y0 + sec_slope * (xs - x0)
-
-    plt.figure()
-    plt.plot(xs, ys, label='f(x)')
-    plt.plot(xs, y_tan, '--', label='tangent')
-    plt.plot(xs, y_sec, ':', label=f'secant h={h_show}')
-    plt.scatter([x0, x0 + h_show], [y0, f1d(x0 + h_show)], color='k', s=25)
-    plt.scatter([x0], [y0], color='r', s=30, zorder=5)
-    plt.xlabel('x')
-    plt.ylabel('y')
-    plt.title('1D curve, tangent, one secant')
-    plt.grid(True, ls=':')
-    plt.legend()
-
-    # 2D: simple central-diff gradient at (x0,y0)
-    h2 = 1e-4
-    fx = (f2d(x0 + h2, y0) - f2d(x0 - h2, y0)) / (2 * h2)
-    fy = (f2d(x0, y0 + h2) - f2d(x0, y0 - h2)) / (2 * h2)
-
-    # 2D contours + small arrow for gradient
-    X = np.linspace(x0 - 1.0, x0 + 1.0, 120)
-    Y = np.linspace(y0 - 1.0, y0 + 1.0, 120)
-    XX, YY = np.meshgrid(X, Y)
-    ZZ = f2d_np(XX, YY)
-    plt.figure()
-    cs = plt.contour(XX, YY, ZZ, levels=20)
-    plt.clabel(cs, inline=True, fontsize=7)
-    plt.scatter([x0], [y0], color='k', s=25)
-    n = np.hypot(fx, fy)
-    if n > 0:
-        u, v = fx / n, fy / n
-        s = 0.5
-        plt.arrow(x0, y0, u * s, v * s, head_width=0.05, color='r', length_includes_head=True)
-    plt.xlabel('x')
-    plt.ylabel('y')
-    plt.title('2D contours and gradient (central diff)')
-    plt.grid(True, ls=':')
-
-    # Simple 3D surface view around (x0, y0)
-    fig = plt.figure()
-    ax3d = fig.add_subplot(111, projection='3d')
-    ax3d.plot_surface(XX, YY, ZZ, cmap='viridis', alpha=0.9, linewidth=0)
-    z0 = f2d(x0, y0)
-    ax3d.scatter([x0], [y0], [z0], color='r', s=20)
-    ax3d.set_title('3D surface z=f(x,y)')
-    ax3d.set_xlabel('x')
-    ax3d.set_ylabel('y')
-    ax3d.set_zlabel('z')
-
     plt.show()
 
 
-if __name__ == '__main__':
-    main()
+# ------------------------------
+# 1D TANGENT + SECANTS PLOT
+# ------------------------------
+
+def tangent_and_secants():
+    x0 = 0.5
+    y0 = f1(x0)
+    m = df1_exact(x0)
+
+    xs = np.linspace(x0 - 2, x0 + 2, 400)
+    plt.figure()
+    plt.plot(xs, f1(xs), label="f(x)")
+
+    # exact tangent
+    plt.plot(xs, y0 + m*(xs - x0), '--', label="tangent (exact)")
+
+    # a few secants
+    for h in [0.5, 0.1, 0.01]:
+        slope = fd_forward(f1, x0, h)
+        plt.plot(xs, y0 + slope*(xs-x0), label=f"secant h={h}")
+
+    plt.scatter([x0], [y0], color="black")
+    plt.legend()
+    plt.title("Tangent and Secants")
+    plt.grid(True, ls=":")
+    plt.show()
+
+
+# ------------------------------
+# 2D CONTOUR + GRADIENT ARROW
+# ------------------------------
+
+def contour_and_gradient():
+    x0, y0 = 0.5, 0.4
+    fx, fy = grad2_exact(x0, y0)
+
+    xs = np.linspace(x0-1, x0+1, 100)
+    ys = np.linspace(y0-1, y0+1, 100)
+    X, Y = np.meshgrid(xs, ys)
+    Z = f2(X, Y)
+
+    plt.figure()
+    cs = plt.contour(X, Y, Z, levels=20)
+    plt.clabel(cs)
+    plt.scatter([x0], [y0], c='red')
+
+    g = np.array([fx, fy])
+    g = g / np.linalg.norm(g)
+    plt.arrow(x0, y0, g[0]*0.4, g[1]*0.4,
+              head_width=0.05, color="red")
+
+    plt.title("2D Contours + Gradient Direction")
+    plt.grid(True, ls=":")
+    plt.show()
+
+
+# ------------------------------
+# 3D SURFACE + TANGENT PLANE
+# ------------------------------
+
+def surface_and_plane():
+    from mpl_toolkits.mplot3d import Axes3D  # required import
+
+    x0, y0 = 0.5, 0.4
+    fx, fy = grad2_exact(x0, y0)
+    z0 = f2(x0, y0)
+
+    xs = np.linspace(x0-1, x0+1, 40)
+    ys = np.linspace(y0-1, y0+1, 40)
+    X, Y = np.meshgrid(xs, ys)
+    Z = f2(X, Y)
+    Zp = z0 + fx*(X-x0) + fy*(Y-y0)
+
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    ax.plot_surface(X, Y, Z, cmap="viridis", alpha=0.7)
+    ax.plot_surface(X, Y, Zp, cmap="autumn", alpha=0.4)
+    ax.scatter([x0], [y0], [z0], c='black')
+    ax.set_title("Surface and Tangent Plane")
+    plt.show()
+
+
+# ------------------------------
+# MAIN
+# ------------------------------
+
+if __name__ == "__main__":
+    derivative_error_plots()
+    tangent_and_secants()
+    contour_and_gradient()
+    surface_and_plane()
