@@ -1,21 +1,3 @@
-#!/usr/bin/env python3
-"""
-AP3: Tangents, normals, and finite-difference accuracy (1D and 2D)
-
-Features
-- 1D: tangent and normal lines; FD: forward/backward/central/five-point
-- 2D: tangent plane and normal vector; FD: central/five-point for fx, fy
-- Error plots shown interactively; CSV tables optional to AP_3/output
-
-Usage
-- Run defaults: python AP_3/main.py
-- To customize, edit Config in this file to set callables and parameters.
-
-Notes
-- Pure-numpy callables for f1d/f2d; optional exact derivatives can be provided as callables.
-- Plots are displayed in windows; CSV tables optional. Works without pandas.
-"""
-
 from __future__ import annotations
 
 import math
@@ -33,13 +15,10 @@ def _require(package: str, import_name: str | None = None):
             f"Missing dependency '{import_name or package}'. Install with: pip install {package}\n"
             f"Original error: {exc}"
         )
+import numpy as np
+import matplotlib.pyplot as plt
 
 
-np = _require("numpy")
-plt = _require("matplotlib", "matplotlib.pyplot")
-
-
-# --------------------- Default functions and optional exact derivatives ---------------------
 
 def default_f1d(x: np.ndarray) -> np.ndarray:
     return np.exp(x) * np.sin(x)
