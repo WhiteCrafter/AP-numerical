@@ -7,23 +7,18 @@ import matplotlib.pyplot as plt
 
 def f1(x):
     return np.exp(x) * np.sin(x)
-
 def df1_exact(x):
     return np.exp(x) * (np.sin(x) + np.cos(x))
 
 # Simple finite differences
 def fd_forward(f, x, h):
     return (f(x+h) - f(x)) / h
-
 def fd_backward(f, x, h):
     return (f(x) - f(x-h)) / h
-
 def fd_central(f, x, h):
     return (f(x+h) - f(x-h)) / (2*h)
-
 def fd_five_point(f, x, h):
     return (-f(x+2*h) + 8*f(x+h) - 8*f(x-h) + f(x-2*h)) / (12*h)
-
 
 # ------------------------------
 # 2D FUNCTION + EXACT GRADIENT
@@ -31,22 +26,17 @@ def fd_five_point(f, x, h):
 
 def f2(x, y):
     return x*x*y + np.sin(x*y)
-
 def grad2_exact(x, y):
     xy = x*y
     fx = 2*x*y + y*np.cos(xy)
     fy = x*x + x*np.cos(xy)
     return fx, fy
-
 def fd_central_x(f, x, y, h):
     return (f(x+h, y) - f(x-h, y)) / (2*h)
-
 def fd_central_y(f, x, y, h):
     return (f(x, y+h) - f(x, y-h)) / (2*h)
-
 def fd_five_x(f, x, y, h):
     return (-f(x+2*h, y)+8*f(x+h,y)-8*f(x-h,y)+f(x-2*h,y))/(12*h)
-
 def fd_five_y(f, x, y, h):
     return (-f(x, y+2*h)+8*f(x,y+h)-8*f(x,y-h)+f(x,y-2*h))/(12*h)
 
@@ -171,8 +161,10 @@ def surface_and_plane():
 # MAIN
 # ------------------------------
 
-if __name__ == "__main__":
-    derivative_error_plots()
-    tangent_and_secants()
-    contour_and_gradient()
-    surface_and_plane()
+derivative_error_plots()
+
+tangent_and_secants()
+
+contour_and_gradient()
+
+surface_and_plane()
