@@ -50,7 +50,3 @@ Library pipeline swaps the detection step with MOG2 foreground masks.
 
 ## Project requirements
 - Python 3, `opencv-python`, `numpy`, `matplotlib`.
-
-## Files
-- `main.py` — primary script with scratch/library pipelines and visualization.
-- `branch.py`, `maincopy.py` — alternate/student-style variants.
