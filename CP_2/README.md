@@ -103,7 +103,6 @@ $$u_{n+1} = u_n + \Delta t \ f(u_{n+1})$$
 
 Since the right-hand side depends on the unknown future state $u_(n+1)$, a nonlinear system must be solved at each time step.
 
----
 
 ## 6. Nonlinear Solvers Used
 I compare two Nonlinear Solving method Fixed-Point Iteration & Newton's Method
@@ -135,7 +134,6 @@ $$G(u) = u - u_n - \Delta t f(u)$$
 
 Newton’s update step is:
 
-$$u^((k+1)) = u^((k)) - J^((-1)) G(u^((k)))$$
 
 where $J$ is the Jacobian matrix.
 
@@ -149,7 +147,6 @@ def jacobian_f(params):
 ```
 Newton’s method converges faster and is more robust for stiff systems.
 
----
 
 ## 7. Comparison of Methods
 
@@ -164,9 +161,11 @@ The comparison criteria are:
 
 The iteration counts are printed and averaged:
 
-`print(f"Thin fixed: {np.mean(it_fp_thin):.2f}") print(f"Thin newton: {np.mean(it_newton_thin):.2f}")`
+```
+print(f"Thin fixed: {np.mean(it_fp_thin):.2f}") print(f"Thin newton: {np.mean(it_newton_thin):.2f}")
+```
 
----
+
 
 ## 8. Simulation Scenarios
 
