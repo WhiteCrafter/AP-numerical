@@ -110,8 +110,7 @@ I compare two Nonlinear Solving method Fixed-Point Iteration & Newton's Method
 ### 6.1 Fixed-Point Iteration
 
 Fixed-point iteration solves the implicit equation by repeatedly substituting the current guess:
-$$
-u^{(k+1)} = u_n + \Delta t \, f(u^{(k)})$$
+$$u^{(k+1)} = u_n + \Delta t \, f(u^{(k)})$$
 
 This method is:
 - Simple to implement    
