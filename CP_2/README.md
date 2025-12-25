@@ -188,7 +188,6 @@ Two scenarios are simulated:
 
 All other parameters are kept the same to isolate the effect of insulation.
 
----
 
 ## 9. Results and Visualization
 
@@ -213,9 +212,9 @@ axes[0].plot(t, newton_thin[:, 0], "--", label="T_p newton")
 - Fixed-point and Newton solutions overlap closely.    
 - Newton’s method requires significantly fewer iterations.
 
----
 
 ## 10. Conclusion
+<img width="984" height="385" alt="image" src="https://github.com/user-attachments/assets/456c6509-6894-4609-87fc-a6f86d5b1f1a" />
 
 This project demonstrates how a real-world thermal system can be modeled using a system of ODEs and solved numerically.  
 By using the Implicit Euler method, stability is maintained even with relatively large time steps.
