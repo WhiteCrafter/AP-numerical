@@ -102,7 +102,7 @@ def main():
     # Time grid
     t0 = 0.0
     t_end = 2300.0
-    dt = 30.0
+    dt = 0.1
     t = np.arange(t0, t_end + dt, dt)
 
     # Two case scenarios
