@@ -241,10 +241,16 @@ class MotionPlanner:
                     forces[j] -= force
         return forces
 
-    def _step(self, positions, velocities, targets):
+    def _step(self, positions, velocities, targets, time_left):
         # Initial value problem: x(0) = positions, v(0) = velocities.
         desired = targets - positions
-        v_sat = self._saturate(desired)
+        distance = np.linalg.norm(desired, axis=1)
+        direction = np.zeros_like(desired)
+        mask = distance > 1e-8
+        direction[mask] = desired[mask] / distance[mask][:, None]
+        speed = np.minimum(self.v_max, self.k_v * distance)
+        v_des = direction * speed[:, None]
+        v_sat = self._saturate(v_des)
         repulsion = self._repulsion_forces(positions)
         accel = self.k_v * v_sat - self.k_d * velocities + repulsion / self.mass
 
@@ -262,9 +268,11 @@ class MotionPlanner:
         frames = []
         steps = 0
         max_dist = np.inf
+        total_time = max(self.dt, move_steps * self.dt)
         while steps < move_steps or (steps < move_steps + self.max_extra and max_dist > self.arrive_tol):
             frames.append(positions.copy())
-            positions, velocities = self._step(positions, velocities, targets)
+            time_left = max(self.dt, total_time - steps * self.dt)
+            positions, velocities = self._step(positions, velocities, targets, time_left)
             max_dist = np.max(np.linalg.norm(targets - positions, axis=1))
             steps += 1
 
