@@ -9,12 +9,12 @@ SWARM_SPACING = 2.0
 SWARM_FRAMES = 80
 SWARM_DELAY = 2.0
 SWARM_INTERVAL = 50
-SWARM_V_MAX = 8
+SWARM_V_MAX = 15
 SWARM_K_V = 10
 SWARM_K_D = 10
-SWARM_K_REP = 4
+SWARM_K_REP = 10
 SWARM_R_SAFE = 0.5
-SWARM_MASS = 0.2
+SWARM_MASS = 3
 SWARM_ARRIVE_TOL = 0.15
 SWARM_MAX_EXTRA = 600
 SWARM_HOLD = 0.0
@@ -42,9 +42,9 @@ def main():
     text = text.strip()
     if not text:
         text = "?"
-    print(text)
+    print(text)#debug
     swarm.run_texts(
-        [text, "Modding"],
+        [text, "Happy New Year"],
         spacing=SWARM_SPACING,
         frames=SWARM_FRAMES,
         delay=SWARM_DELAY,
