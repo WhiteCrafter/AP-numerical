@@ -30,6 +30,10 @@ This first scaffold intentionally includes placeholder implementations and TODO 
 
 ## Notes
 
+- `single.stop_radius`: distance to goal B where robot velocity is clamped to zero.
+- `swarm.stop_radius`: distance to each robot's respective finish target where velocity is clamped to zero.
+
+
 - The skeleton currently uses only Python standard library modules to stay runnable in restricted environments.
 - Trajectories are exported to CSV files in `outputs/plots/`.
 - You can later swap in NumPy/Matplotlib/OpenCV without changing top-level orchestration.

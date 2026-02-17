@@ -3,14 +3,14 @@
   "simulation": {
     "dt": 0.02,
     "t_end": 15.0,
-    "v_max": 25.0,
+    "v_max": 23.0,
     "mass": 1.0,
-    "k_p": 10.0,
+    "k_p": 4.0,
     "k_d": 1.2,
-    "k_rep": 5.0,
-    "r_safe": 1.0,
-    "k_wall": 8.0,
-    "wall_margin": 0.5
+    "k_rep": 25.0,
+    "r_safe": 0.8,
+    "k_wall": 20.0,
+    "wall_margin": 0.8
   },
   "path_extraction": {
     "map_path": "./data/maps/testmap.png",
@@ -29,20 +29,30 @@
     "map_resize_factor": 0.5
   },
   "single": {
-    "path_radius": 3
+    "path_radius": 3,
+    "stop_radius": 3
   },
   "swarm": {
     "n_a": 5,
     "n_b": 5,
     "corridor_width": 1.2,
-    "path_radius": 0.6,
+    "path_radius": 3,
     "lane_center_offsets": [
       -0.25,
       0.25
     ],
     "preferred_spawn_spacing": 0.35,
     "spawn_jitter": 0.01,
-    "spawn_seed": 7
+    "spawn_seed": 7,
+    "stop_radius": 0.2,
+    "start_a": [
+      1.0,
+      1.0
+    ],
+    "start_b": [
+      8.0,
+      1.0
+    ]
   },
   "pedestrian": {
     "start": [

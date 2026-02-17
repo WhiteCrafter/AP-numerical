@@ -75,6 +75,7 @@ def setup_single_scenario(config: dict) -> ScenarioSetup:
     targets, waypoints, waypoint_indices = _build_straight_line_targets(start, goal, n=1, config=config)
     path_curve = None if waypoints is None else build_spline_from_waypoints(waypoints)
     path_radius = float(config.get("single", {}).get("path_radius", 0.25)) if path_curve is not None else None
+    stop_radius = float(config.get("single", {}).get("stop_radius", 0.15))
     return ScenarioSetup(
         positions=positions,
         velocities=velocities,
@@ -83,6 +84,8 @@ def setup_single_scenario(config: dict) -> ScenarioSetup:
         waypoint_indices=waypoint_indices,
         path_curve=path_curve,
         path_radius=path_radius,
+        terminal_targets=np.repeat(goal[np.newaxis, :], positions.shape[0], axis=0),
+        stop_radius=stop_radius,
     )
 
 
@@ -93,11 +96,12 @@ def setup_swarm_scenario(config: dict) -> ScenarioSetup:
     """Create initial robot states for two groups moving opposite directions."""
     swarm_cfg = config["swarm"]
     sim_cfg = config.get("simulation", {})
+    path_cfg = config.get("path_extraction", {})
+
     n_a = int(swarm_cfg["n_a"])
     n_b = int(swarm_cfg["n_b"])
     r_safe = float(sim_cfg.get("r_safe", 0.25))
 
-    path_cfg = config.get("path_extraction", {})
     start_a_cfg = swarm_cfg.get("start_a", path_cfg.get("point_a"))
     start_b_cfg = swarm_cfg.get("start_b", path_cfg.get("point_b"))
     if start_a_cfg is None or start_b_cfg is None:
@@ -112,24 +116,16 @@ def setup_swarm_scenario(config: dict) -> ScenarioSetup:
     if corridor_length <= 1e-9:
         raise ValueError("Swarm start_a and start_b must not be identical.")
 
-    lane_cfg = swarm_cfg.get("lane_center_offsets", [-0.2, 0.2])
-    if len(lane_cfg) < 2:
-        raise ValueError("swarm.lane_center_offsets must contain at least two values.")
-    lane_a_offset = float(lane_cfg[0])
-    lane_b_offset = float(lane_cfg[1])
-    corridor_width = float(
-        swarm_cfg.get("corridor_width", 2.0 * max(abs(lane_a_offset), abs(lane_b_offset), r_safe))
-    )
-    half_width = 0.5 * corridor_width
-    path_radius = float(swarm_cfg.get("path_radius", half_width))
-    preferred_spacing = float(swarm_cfg.get("preferred_spawn_spacing", r_safe * 1.2))
-    spawn_spacing = max(preferred_spacing, r_safe * 1.05)
-    seed = swarm_cfg.get("spawn_seed")
-    rng = np.random.default_rng(None if seed is None else int(seed))
-    jitter_scale = float(swarm_cfg.get("spawn_jitter", 0.01))
-
     tangent = centerline / corridor_length
     normal = np.array([-tangent[1], tangent[0]], dtype=np.float64)
+
+    corridor_width = float(swarm_cfg.get("corridor_width", max(2.0 * r_safe, 1.0)))
+    half_width = 0.5 * corridor_width
+    path_radius = float(swarm_cfg.get("path_radius", half_width))
+    cluster_radius = max(1e-6, min(path_radius, half_width))
+
+    seed = swarm_cfg.get("spawn_seed")
+    rng = np.random.default_rng(None if seed is None else int(seed))
 
     def clip_to_corridor(points: np.ndarray) -> np.ndarray:
         rel = points - start_a
@@ -137,38 +133,34 @@ def setup_swarm_scenario(config: dict) -> ScenarioSetup:
         lateral = np.clip(rel @ normal, -half_width, half_width)
         return start_a + np.outer(longitudinal, tangent) + np.outer(lateral, normal)
 
-    def make_group(anchor: np.ndarray, n: int, lane_offset: float, direction_sign: float) -> np.ndarray:
+    def sample_cluster(anchor: np.ndarray, n: int) -> np.ndarray:
         if n <= 0:
             return np.empty((0, 2), dtype=np.float64)
-        lane_offset = float(np.clip(lane_offset, -half_width, half_width))
-        distances = np.arange(n, dtype=np.float64) * spawn_spacing
-        distances += rng.uniform(-jitter_scale, jitter_scale, size=n)
-        distances = np.clip(distances, 0.0, corridor_length)
-        distances.sort()
-        distances = np.maximum.accumulate(distances)
+        points: list[np.ndarray] = []
+        attempts = 0
+        max_attempts = max(500, 200 * n)
+        min_sep = max(0.25 * r_safe, 1e-3)
+        while len(points) < n and attempts < max_attempts:
+            attempts += 1
+            angle = rng.uniform(0.0, 2.0 * np.pi)
+            radius = cluster_radius * np.sqrt(rng.uniform(0.0, 1.0))
+            candidate = anchor + radius * np.array([np.cos(angle), np.sin(angle)], dtype=np.float64)
+            candidate = clip_to_corridor(candidate[np.newaxis, :])[0]
+            if any(float(np.linalg.norm(candidate - p)) < min_sep for p in points):
+                continue
+            points.append(candidate)
 
-        if direction_sign > 0.0:
-            centers = anchor + np.outer(distances, tangent)
-        else:
-            centers = anchor - np.outer(distances, tangent)
+        if len(points) < n:
+            filler = np.repeat(anchor[np.newaxis, :], n - len(points), axis=0)
+            filled = np.vstack(points + [p for p in filler]) if points else filler
+            return clip_to_corridor(filled)
 
-        lateral_jitter = rng.uniform(-jitter_scale, jitter_scale, size=n)
-        points = centers + np.outer(lane_offset + lateral_jitter, normal)
-        points = clip_to_corridor(points)
-
-        for i in range(1, n):
-            delta = points[i] - points[i - 1]
-            dist = float(np.linalg.norm(delta))
-            if dist < r_safe:
-                needed = (r_safe - dist) + 1e-3
-                points[i] += direction_sign * needed * tangent
-
-        return clip_to_corridor(points)
+        return clip_to_corridor(np.vstack(points))
 
     def enforce_pairwise_distance(points: np.ndarray) -> np.ndarray:
         resolved = points.copy()
-        max_iters = 200
         eps = 1e-9
+        max_iters = 300
         for _ in range(max_iters):
             moved = False
             for i in range(len(resolved)):
@@ -178,10 +170,7 @@ def setup_swarm_scenario(config: dict) -> ScenarioSetup:
                     if dist + eps >= r_safe:
                         continue
                     moved = True
-                    if dist <= eps:
-                        unit = tangent if (i + j) % 2 == 0 else normal
-                    else:
-                        unit = d / dist
+                    unit = tangent if dist <= eps else d / dist
                     correction = 0.5 * (r_safe - dist + 1e-3)
                     resolved[i] += correction * unit
                     resolved[j] -= correction * unit
@@ -196,33 +185,48 @@ def setup_swarm_scenario(config: dict) -> ScenarioSetup:
         if min_dist + 1e-9 < r_safe:
             raise ValueError(
                 "Could not initialize swarm with pairwise distances above r_safe. "
-                "Increase corridor length/width or reduce robot count."
+                "Increase corridor width/path_radius or reduce robot count."
             )
         return resolved
 
-    pos_a = make_group(start_a, n_a, lane_a_offset, direction_sign=1.0)
-    pos_b = make_group(start_b, n_b, lane_b_offset, direction_sign=-1.0)
-
+    pos_a = sample_cluster(start_a, n_a)
+    pos_b = sample_cluster(start_b, n_b)
     positions = enforce_pairwise_distance(np.vstack((pos_a, pos_b)))
-    pos_a = positions[:n_a]
-    pos_b = positions[n_a:]
     velocities = np.zeros_like(positions)
 
-    def make_targets(group_positions: np.ndarray, direction_sign: float) -> np.ndarray:
-        rel = group_positions - start_a
-        lateral = rel @ normal
-        if direction_sign > 0.0:
-            target_longitudinal = np.full(group_positions.shape[0], corridor_length)
-        else:
-            target_longitudinal = np.zeros(group_positions.shape[0])
-        target_points = (
-            start_a
-            + np.outer(target_longitudinal, tangent)
-            + np.outer(np.clip(lateral, -half_width, half_width), normal)
-        )
-        return clip_to_corridor(target_points)
+    target_a = np.repeat(start_b[np.newaxis, :], n_a, axis=0)
+    target_b = np.repeat(start_a[np.newaxis, :], n_b, axis=0)
+    targets = np.vstack((target_a, target_b))
 
-    targets = np.vstack((make_targets(pos_a, 1.0), make_targets(pos_b, -1.0)))
+    path_waypoints = np.vstack((start_a, start_b))
+    map_path = path_cfg.get("map_path")
+    if map_path and Path(map_path).exists() and all(k in path_cfg for k in ("world_origin", "meters_per_pixel")):
+        try:
+            path_waypoints = extract_waypoints(
+                map_path=map_path,
+                point_a_world=start_a,
+                point_b_world=start_b,
+                origin_world=np.array(path_cfg["world_origin"], dtype=np.float64),
+                meters_per_pixel=np.array(path_cfg["meters_per_pixel"], dtype=np.float64),
+                traversable_threshold=float(path_cfg.get("traversable_threshold", 0.5)),
+                waypoint_stride=int(path_cfg.get("waypoint_stride", 4)),
+                debug_output_dir=path_cfg.get("debug_output_dir"),
+                debug_prefix=str(path_cfg.get("debug_prefix", "path_debug_swarm")),
+                map_resize_factor=float(path_cfg.get("map_resize_factor", 1.0)),
+            )
+            path_waypoints = np.asarray(path_waypoints, dtype=np.float64)
+            if path_waypoints.shape[0] >= 2:
+                path_waypoints[0] = start_a
+                path_waypoints[-1] = start_b
+            else:
+                path_waypoints = np.vstack((start_a, start_b))
+        except ValueError as exc:
+            warnings.warn(
+                f"Swarm path extraction failed ({exc}); falling back to straight centerline.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+
     corridor_geometry = CorridorGeometry(
         origin=start_a,
         tangent=tangent,
@@ -231,15 +235,19 @@ def setup_swarm_scenario(config: dict) -> ScenarioSetup:
         half_width=half_width,
     )
 
-    swarm_path = build_spline_from_waypoints(np.vstack((start_a, start_b)))
+    swarm_path = build_spline_from_waypoints(path_waypoints)
+    stop_radius = float(swarm_cfg.get("stop_radius", 0.2))
     return ScenarioSetup(
         positions=positions,
         velocities=velocities,
         targets=targets,
         path_curve=swarm_path,
         path_radius=path_radius,
+        terminal_targets=targets.copy(),
+        stop_radius=stop_radius,
         corridor_geometry=corridor_geometry,
     )
+
 
 
 # -------------------------------

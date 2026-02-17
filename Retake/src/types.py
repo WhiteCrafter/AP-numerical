@@ -46,6 +46,7 @@ class ScenarioSetup:
     waypoints: Optional global waypoint sequence with shape ``(M, 2)``.
     waypoint_indices: Per-agent waypoint cursor with shape ``(N,)``.
     path_curve: Optional continuous path model usable by waypoint and VT guidance.
+    terminal_targets: Per-agent finish points used for stopping behavior.
     """
 
     positions: FloatArray
@@ -55,6 +56,8 @@ class ScenarioSetup:
     waypoint_indices: NDArray[np.int_] | None = None
     path_curve: "ParametricSpline2D" | None = None
     path_radius: float | None = None
+    terminal_targets: FloatArray | None = None
+    stop_radius: float | None = None
     corridor_geometry: CorridorGeometry | None = None
     velocity_field: VelocityField | None = None
 

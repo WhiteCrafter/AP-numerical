@@ -10,6 +10,7 @@ State = tuple[FloatArray, FloatArray]
 
 def _desired_velocity_from_path(
     x: FloatArray,
+    targets: FloatArray,
     setup: ScenarioSetup,
     params: SimulationParams,
 ) -> FloatArray | None:
@@ -23,6 +24,9 @@ def _desired_velocity_from_path(
     k_normal = float(params.k_p)
     for i in range(x.shape[0]):
         tangent = curve.tangent(float(s_proj[i]))
+        to_target = targets[i] - x[i]
+        if float(to_target @ tangent) < 0.0:
+            tangent = -tangent
         normal = np.array([-tangent[1], tangent[0]], dtype=np.float64)
         err = x[i] - centers[i]
         e_n = float(err @ normal)
@@ -41,12 +45,16 @@ def _rhs(
     velocity_field: VelocityField | None,
     time: float,
     setup: ScenarioSetup,
+    arrived: np.ndarray | None = None,
 ) -> State:
     x, v = state
     flow = np.zeros_like(x) if velocity_field is None else np.asarray(velocity_field(x, time), dtype=np.float64)
+    if arrived is not None and np.any(arrived):
+        flow = flow.copy()
+        flow[arrived] = 0.0
     x_dot = saturate_velocity(v + flow, params.v_max)
 
-    desired_v = _desired_velocity_from_path(x, setup, params)
+    desired_v = _desired_velocity_from_path(x, targets, setup, params)
     if desired_v is None:
         v_dot = accelerations(x, v, targets, params, corridor_geometry)
     else:
@@ -55,6 +63,11 @@ def _rhs(
         track_v = params.k_p * (desired_v - v)
         damp = -params.k_d * v
         v_dot = (track_v + reps + walls + damp) / params.mass
+    if arrived is not None and np.any(arrived):
+        x_dot = x_dot.copy()
+        v_dot = v_dot.copy()
+        x_dot[arrived] = 0.0
+        v_dot[arrived] = 0.0
     return x_dot, v_dot
 
 
@@ -73,11 +86,12 @@ def _rk4_step(
     velocity_field: VelocityField | None,
     time: float,
     setup: ScenarioSetup,
+    arrived: np.ndarray | None = None,
 ) -> State:
-    k1 = _rhs(state, targets, params, corridor_geometry, velocity_field, time, setup)
-    k2 = _rhs(_add_state(state, k1, dt / 2.0), targets, params, corridor_geometry, velocity_field, time + dt / 2.0, setup)
-    k3 = _rhs(_add_state(state, k2, dt / 2.0), targets, params, corridor_geometry, velocity_field, time + dt / 2.0, setup)
-    k4 = _rhs(_add_state(state, k3, dt), targets, params, corridor_geometry, velocity_field, time + dt, setup)
+    k1 = _rhs(state, targets, params, corridor_geometry, velocity_field, time, setup, arrived)
+    k2 = _rhs(_add_state(state, k1, dt / 2.0), targets, params, corridor_geometry, velocity_field, time + dt / 2.0, setup, arrived)
+    k3 = _rhs(_add_state(state, k2, dt / 2.0), targets, params, corridor_geometry, velocity_field, time + dt / 2.0, setup, arrived)
+    k4 = _rhs(_add_state(state, k3, dt), targets, params, corridor_geometry, velocity_field, time + dt, setup, arrived)
 
     x, v = state
     x_next = x + (dt / 6.0) * (k1[0] + 2.0 * k2[0] + 2.0 * k3[0] + k4[0])
@@ -86,12 +100,20 @@ def _rk4_step(
     return x_next, v_next
 
 
+
+def _arrival_mask(x: FloatArray, terminal_targets: FloatArray | None, stop_radius: float | None) -> np.ndarray:
+    if terminal_targets is None or stop_radius is None or stop_radius <= 0.0:
+        return np.zeros(x.shape[0], dtype=bool)
+    d = np.linalg.norm(x - terminal_targets, axis=1)
+    return d <= float(stop_radius)
+
 def _advance_waypoint_targets(
     x: FloatArray,
     targets: FloatArray,
     waypoints: FloatArray | None,
     waypoint_indices: np.ndarray | None,
     epsilon: float,
+    arrived: np.ndarray | None = None,
 ) -> None:
     if waypoints is None or waypoint_indices is None or waypoints.shape[0] == 0:
         return
@@ -118,14 +140,31 @@ def run_simulation(setup: ScenarioSetup, params: SimulationParams) -> Simulation
         waypoint_indices = np.array(setup.waypoint_indices, dtype=np.int64, copy=True)
 
     waypoint_epsilon = max(1e-6, params.v_max * params.dt)
-    _advance_waypoint_targets(x, targets, waypoints, waypoint_indices, waypoint_epsilon)
+    terminal_targets = None if setup.terminal_targets is None else np.array(setup.terminal_targets, dtype=np.float64, copy=False)
+
+    arrived = _arrival_mask(x, terminal_targets, setup.stop_radius)
+    if np.any(arrived):
+        v[arrived] = 0.0
+
+    _advance_waypoint_targets(x, targets, waypoints, waypoint_indices, waypoint_epsilon, arrived)
 
     positions = [x.copy()]
     velocities = [v.copy()]
 
     for _ in range(1, steps):
-        _advance_waypoint_targets(x, targets, waypoints, waypoint_indices, waypoint_epsilon)
-        x, v = _rk4_step((x, v), targets, params.dt, params, setup.corridor_geometry, setup.velocity_field, times[_ - 1], setup)
+        arrived = _arrival_mask(x, terminal_targets, setup.stop_radius)
+        if np.any(arrived):
+            v[arrived] = 0.0
+            if terminal_targets is not None:
+                targets[arrived] = terminal_targets[arrived]
+
+        _advance_waypoint_targets(x, targets, waypoints, waypoint_indices, waypoint_epsilon, arrived)
+        x, v = _rk4_step((x, v), targets, params.dt, params, setup.corridor_geometry, setup.velocity_field, times[_ - 1], setup, arrived)
+
+        arrived_next = _arrival_mask(x, terminal_targets, setup.stop_radius)
+        if np.any(arrived_next):
+            v[arrived_next] = 0.0
+
         positions.append(x.copy())
         velocities.append(v.copy())
 
