@@ -1,0 +1,86 @@
+{
+  "scenario": "single",
+  "simulation": {
+    "dt": 0.02,
+    "t_end": 15.0,
+    "v_max": 25.0,
+    "mass": 1.0,
+    "k_p": 10.0,
+    "k_d": 1.2,
+    "k_rep": 5.0,
+    "r_safe": 1.0,
+    "k_wall": 8.0,
+    "wall_margin": 0.5
+  },
+  "path_extraction": {
+    "map_path": "./data/maps/testmap.png",
+    "world_origin": [
+      0.0,
+      -2.0
+    ],
+    "meters_per_pixel": [
+      0.05,
+      0.05
+    ],
+    "traversable_threshold": 0.5,
+    "waypoint_stride": 6,
+    "debug_output_dir": "outputs/path_debug",
+    "debug_prefix": "path",
+    "map_resize_factor": 0.5
+  },
+  "single": {
+    "path_radius": 3
+  },
+  "swarm": {
+    "n_a": 5,
+    "n_b": 5,
+    "corridor_width": 1.2,
+    "path_radius": 0.6,
+    "lane_center_offsets": [
+      -0.25,
+      0.25
+    ],
+    "preferred_spawn_spacing": 0.35,
+    "spawn_jitter": 0.01,
+    "spawn_seed": 7
+  },
+  "pedestrian": {
+    "start": [
+      0.5,
+      0.0
+    ],
+    "goal": [
+      4.5,
+      0.0
+    ],
+    "flow_estimation": {
+      "mode": "placeholder",
+      "video_path": "",
+      "frame_start": 0,
+      "frame_end": null,
+      "world_origin": [
+        0.0,
+        0.0
+      ],
+      "meters_per_pixel": [
+        0.05,
+        0.05
+      ],
+      "invert_y_axis": true,
+      "interpolation": "bilinear",
+      "on_error": "placeholder",
+      "placeholder_velocity": [
+        0.4,
+        0.0
+      ]
+    }
+  },
+  "output": {
+    "save_plot": false,
+    "output_dir": "outputs/plots",
+    "save_video": true,
+    "show_popup": false,
+    "video_fps": 20,
+    "video_name": "simulation.gif"
+  }
+}

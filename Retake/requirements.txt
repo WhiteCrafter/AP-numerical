@@ -1,0 +1,5 @@
+numpy
+# Optional developer dependency:
+# pytest
+Pillow
+opencv-python-headless
